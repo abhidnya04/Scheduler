@@ -78,7 +78,7 @@ class InviteRequest(BaseModel):
     date: Optional[str] = None
     duration: Optional[int] = None
     slot_window: Optional[str] = None
-    host_email: str
+  
 
 
 
@@ -87,14 +87,15 @@ def home():
     return {"message": "Calendly Clone"}
 
 @app.get("/auth/google")
-async def auth_google():
+async def auth_google(state: Optional[str] = None):
     flow = Flow.from_client_config(client_config(), scopes=SCOPES)
     flow.redirect_uri = REDIRECT_URI
 
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
-        prompt="consent"
+        prompt="consent",
+        state=state
     )
     return RedirectResponse(auth_url)
 
@@ -107,25 +108,7 @@ async def send_invites(req: InviteRequest, background_tasks: BackgroundTasks):
     """
     results = []
 
-    # Get host user_id from the database using the host email
-    host_user_email = req.host_email  # you can pass the host's email here instead of UUID
-    host_data = supabase.table("users").select("id").eq("email", host_user_email).execute()
 
-    if not host_data.data:
-        return JSONResponse({"error": "Host user not found"}, status_code=400)
-
-
-    host_user_id = host_data.data[0]["id"]
-
-      # --- ADD MEETING CREATION HERE ---
-    meeting = supabase.table("meetings").insert({
-            "user_id": host_user_id,  # use host_user_id from request
-            "title": req.title,
-            "start_time": datetime.fromisoformat(req.date + "T09:00:00").isoformat(),
-            "end_time": (datetime.fromisoformat(req.date + "T09:00:00") + timedelta(minutes=req.duration)).isoformat()
-    }).execute()
-    meeting_id = meeting.data[0]["id"]
-    # ---------------------------------
 
     for email in req.emails:
         existing = supabase.table("users").select("id").eq("email", email).execute()
@@ -143,6 +126,9 @@ async def send_invites(req: InviteRequest, background_tasks: BackgroundTasks):
             state=state
         )
 
+        invite_link = f"{BACKEND_BASE_URL}/auth/google?state={state}"
+
+
         # build email body (you can include meeting details)
         # build email body (you can include meeting details)
         body = f"""
@@ -150,7 +136,7 @@ async def send_invites(req: InviteRequest, background_tasks: BackgroundTasks):
         <p>You have been invited to join <b>Schedulr</b>, a meeting scheduler.</p>
         <p>To participate and allow the host to check your availability, please grant access to your Google Calendar.</p>
         <p>
-           <a href="{auth_url}" 
+           <a href="{invite_link}" 
             style="display:inline-block;
             padding:12px 20px;
             background-color:#1a73e8;
@@ -170,7 +156,7 @@ async def send_invites(req: InviteRequest, background_tasks: BackgroundTasks):
         # save invite record in Supabase
         supabase.table("invites").insert({
             "email": email,
-            "meeting_id": meeting_id,  # assign the meeting this invite belongs to
+
             "status": "pending"
         }).execute()
 
@@ -210,3 +196,38 @@ async def auth_callback(request: Request):
     redirect_url = f"{FRONTEND_URL}/schedule?authorized={urllib.parse.quote_plus(invited_email)}&user_id={user_id}"
     return RedirectResponse(redirect_url)
 
+class ScheduleMeetingRequest(BaseModel):
+    title: str
+    date: str
+    duration: int
+    host_email: EmailStr
+
+@app.post("/meetings/schedule")
+async def schedule_meeting(req: ScheduleMeetingRequest):
+    # Fetch all invites for this host
+    invites_data = supabase.table("invites").select("*").eq("host_email", req.host_email).execute()
+    invites = invites_data.data
+
+    # Check if all are authorized
+    if not invites or any(inv["status"] != "authorized" for inv in invites):
+        return JSONResponse({"error": "Not all members are authorized yet"}, status_code=400)
+
+    # Get host user_id
+    host_data = supabase.table("users").select("id").eq("email", req.host_email).execute()
+    if not host_data.data:
+        return JSONResponse({"error": "Host not found"}, status_code=400)
+    host_user_id = host_data.data[0]["id"]
+
+    # Create meeting
+    meeting = supabase.table("meetings").insert({
+        "user_id": host_user_id,
+        "title": req.title,
+        "start_time": datetime.fromisoformat(req.date + "T09:00:00").isoformat(),
+        "end_time": (datetime.fromisoformat(req.date + "T09:00:00") + timedelta(minutes=req.duration)).isoformat()
+    }).execute()
+
+    meeting_id = meeting.data[0]["id"]
+
+    
+
+    return {"message": "Meeting scheduled", "meeting_id": meeting_id}

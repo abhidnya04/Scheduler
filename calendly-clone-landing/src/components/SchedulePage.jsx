@@ -16,6 +16,7 @@ export default function SchedulePage() {
   const [slotWindow, setSlotWindow] = useState("before_lunch");
   const [emails, setEmails] = useState("");
   const [authorizedEmails, setAuthorizedEmails] = useState([]);
+  const [hostEmail, setHostEmail] = useState("");
 
   // When an invitee completes OAuth, they get redirected here with ?authorized=email
   useEffect(() => {
@@ -32,6 +33,16 @@ export default function SchedulePage() {
     }
   }, [location.search]);
 
+  // Fetch current logged-in user's email
+  useEffect(() => {
+    if (loggedInUserId) {
+      fetch(`http://localhost:8000/users/${loggedInUserId}`)
+        .then((res) => res.json())
+        .then((data) => setHostEmail(data.email))
+        .catch((err) => console.error("Failed to fetch host email:", err));
+    }
+  }, [loggedInUserId]);
+
   const handleSendInvites = async () => {
     const list = emails.split(",").map((e) => e.trim()).filter(Boolean);
     console.log({ list, loggedInUserId, payload: { emails: list, title, date: date.toISOString().split("T")[0], duration, slot_window: slotWindow, host_user_id: loggedInUserId } });
@@ -46,7 +57,7 @@ export default function SchedulePage() {
       date: date.toISOString().split("T")[0],
       duration,
       slot_window: slotWindow,
-      host_user_id: loggedInUserId
+      
     };
 
     const res = await fetch("http://localhost:8000/invites/send", {

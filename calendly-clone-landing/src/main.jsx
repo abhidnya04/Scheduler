@@ -8,8 +8,7 @@ import SchedulePage from './components/SchedulePage.jsx'
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
-      <SchedulePage/>
-     {/* // <App /> */}
+      // <App />
     </BrowserRouter>
   </React.StrictMode>,
 )

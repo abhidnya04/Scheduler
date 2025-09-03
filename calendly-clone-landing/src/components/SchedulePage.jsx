@@ -7,42 +7,57 @@ import "react-calendar/dist/Calendar.css";
 export default function SchedulePage() {
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
-  const token = queryParams.get("token"); // <-- get token from URL
+  const hostToken = queryParams.get("token"); // optional host token
+  const loggedInUserId = queryParams.get("user_id");
 
   const [date, setDate] = useState(new Date());
   const [title, setTitle] = useState("New Meeting");
   const [duration, setDuration] = useState(30);
   const [slotWindow, setSlotWindow] = useState("before_lunch");
   const [emails, setEmails] = useState("");
+  const [authorizedEmails, setAuthorizedEmails] = useState([]);
 
+  // When an invitee completes OAuth, they get redirected here with ?authorized=email
   useEffect(() => {
-    if (token) {
-      console.log("✅ Google OAuth Token:", token);
-      // later: use this token to fetch events from Google Calendar
-    }
-  }, [token]);
+    const authorized = queryParams.get("authorized");
+    if (authorized) {
+      const decoded = decodeURIComponent(authorized);
+      setAuthorizedEmails((prev) => {
+        if (prev.includes(decoded)) return prev;
+        return [...prev, decoded];
+      });
 
-  const handleFindSlot = async () => {
+      // optionally remove the query param from URL afterwards (clean UX)
+      // history.replaceState(null, "", window.location.pathname + window.location.search.replace(/authorized=[^&]+&?/, ""));
+    }
+  }, [location.search]);
+
+  const handleSendInvites = async () => {
+    const list = emails.split(",").map((e) => e.trim()).filter(Boolean);
+    console.log({ list, loggedInUserId, payload: { emails: list, title, date: date.toISOString().split("T")[0], duration, slot_window: slotWindow, host_user_id: loggedInUserId } });
+    if (!list.length) {
+      alert("Enter at least one email");
+      return;
+    }
+
     const payload = {
-      emails: emails.split(",").map((e) => e.trim()),
-      date: date.toISOString().split("T")[0],
-      slot_window: slotWindow,
-      duration,
+      emails: list,
       title,
+      date: date.toISOString().split("T")[0],
+      duration,
+      slot_window: slotWindow,
+      host_user_id: loggedInUserId
     };
 
-    const res = await fetch("http://localhost:8000/meetings/find-slot", {
+    const res = await fetch("http://localhost:8000/invites/send", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`, // ✅ send token to backend
-      },
-      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
     });
 
     const data = await res.json();
-    console.log("Response:", data);
-    alert("Meeting request sent! Check console.");
+    console.log("invites/send:", data);
+    alert("Invite emails queued (check console for results).");
   };
 
   return (
@@ -51,13 +66,20 @@ export default function SchedulePage() {
       <div className="w-1/2 p-8 bg-gray-50 border-r">
         <h2 className="text-2xl font-bold mb-4">{title}</h2>
         <p className="mb-2">Duration: {duration} min</p>
-        <p className="mb-2">
-          Slot:{" "}
-          {slotWindow === "before_lunch"
-            ? "Before Lunch (9–12:30)"
-            : "After Lunch (13:30–18:00)"}
-        </p>
-        <p className="mb-2">Members: {emails}</p>
+        <p className="mb-2">{slotWindow === "before_lunch" ? "Before Lunch (9–12:30)" : "After Lunch (13:30–18:00)"}</p>
+        <p className="mb-2">Members:</p>
+        <ul>
+          {emails.split(",").map((raw) => {
+            const e = raw.trim();
+            if (!e) return null;
+            const isAuthorized = authorizedEmails.includes(e);
+            return (
+              <li key={e}>
+                {e} {isAuthorized ? <span className="text-green-600">✅ Authorized</span> : <span className="text-red-500">❌ Not authorized</span>}
+              </li>
+            );
+          })}
+        </ul>
         <Calendar value={date} onChange={setDate} />
       </div>
 
@@ -67,20 +89,12 @@ export default function SchedulePage() {
 
         <label className="block mb-4">
           <span className="text-gray-700">Title</span>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full border p-2 rounded mt-1"
-          />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full border p-2 rounded mt-1" />
         </label>
 
         <label className="block mb-4">
           <span className="text-gray-700">Duration</span>
-          <select
-            value={duration}
-            onChange={(e) => setDuration(parseInt(e.target.value))}
-            className="w-full border p-2 rounded mt-1"
-          >
+          <select value={duration} onChange={(e) => setDuration(parseInt(e.target.value))} className="w-full border p-2 rounded mt-1">
             <option value={30}>30 min</option>
             <option value={45}>45 min</option>
             <option value={60}>60 min</option>
@@ -89,11 +103,7 @@ export default function SchedulePage() {
 
         <label className="block mb-4">
           <span className="text-gray-700">Slot Window</span>
-          <select
-            value={slotWindow}
-            onChange={(e) => setSlotWindow(e.target.value)}
-            className="w-full border p-2 rounded mt-1"
-          >
+          <select value={slotWindow} onChange={(e) => setSlotWindow(e.target.value)} className="w-full border p-2 rounded mt-1">
             <option value="before_lunch">Before Lunch</option>
             <option value="after_lunch">After Lunch</option>
           </select>
@@ -101,19 +111,14 @@ export default function SchedulePage() {
 
         <label className="block mb-4">
           <span className="text-gray-700">Invitee Emails (comma separated)</span>
-          <input
-            value={emails}
-            onChange={(e) => setEmails(e.target.value)}
-            className="w-full border p-2 rounded mt-1"
-          />
+          <input value={emails} onChange={(e) => setEmails(e.target.value)} className="w-full border p-2 rounded mt-1" />
         </label>
 
-        <button
-          onClick={handleFindSlot}
-          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-        >
-          Find Slot
-        </button>
+        <div className="flex items-center gap-3">
+          <button onClick={handleSendInvites} className="bg-indigo-600 text-white px-5 py-2 rounded-lg hover:bg-indigo-700">
+            Send Access Invites
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { useLocation } from "react-router-dom";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 
+
 export default function SchedulePage() {
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
@@ -17,6 +18,26 @@ export default function SchedulePage() {
   const [emails, setEmails] = useState("");
   const [authorizedEmails, setAuthorizedEmails] = useState([]);
   const [hostEmail, setHostEmail] = useState("");
+  const [loadingHost, setLoadingHost] = useState(true);
+
+  // restore saved emails on first render
+useEffect(() => {
+  const savedEmails = localStorage.getItem("invite_emails");
+  if (savedEmails) {
+    setEmails(savedEmails);
+  }
+}, []);
+
+// save emails whenever they change
+useEffect(() => {
+  if (emails) {
+    localStorage.setItem("invite_emails", emails);
+  } else {
+    localStorage.removeItem("invite_emails");
+  }
+}, [emails]);
+
+
 
   // When an invitee completes OAuth, they get redirected here with ?authorized=email
   useEffect(() => {
@@ -35,13 +56,36 @@ export default function SchedulePage() {
 
   // Fetch current logged-in user's email
   useEffect(() => {
-    if (loggedInUserId) {
-      fetch(`http://localhost:8000/users/${loggedInUserId}`)
-        .then((res) => res.json())
-        .then((data) => setHostEmail(data.email))
-        .catch((err) => console.error("Failed to fetch host email:", err));
-    }
-  }, [loggedInUserId]);
+  if (loggedInUserId) {
+    fetch(`http://localhost:8000/users/${loggedInUserId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.email) {
+          setHostEmail(data.email);
+        }
+      })
+      .catch((err) => console.error("Failed to fetch host email:", err))
+      .finally(() => setLoadingHost(false));   // <-- NEW
+  } else {
+    setLoadingHost(false);   // if no loggedInUserId
+  }
+}, [loggedInUserId]);
+
+ // Check which emails are already registered
+  useEffect(() => {
+    const list = emails.split(",").map(e => e.trim()).filter(Boolean);
+    list.forEach(email => {
+      fetch(`http://localhost:8000/users/by-email?email=${encodeURIComponent(email)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.email && !authorizedEmails.includes(data.email)) {
+            setAuthorizedEmails(prev => [...prev, data.email]);
+          }
+        })
+        .catch(console.error);
+    });
+  }, [emails]);
+
 
   const handleSendInvites = async () => {
     const list = emails.split(",").map((e) => e.trim()).filter(Boolean);
@@ -51,13 +95,15 @@ export default function SchedulePage() {
       return;
     }
 
+    
+
     const payload = {
       emails: list,
       title,
       date: date.toISOString().split("T")[0],
       duration,
       slot_window: slotWindow,
-      
+      host_email: hostEmail || "host@example.com",
     };
 
     const res = await fetch("http://localhost:8000/invites/send", {
@@ -126,9 +172,14 @@ export default function SchedulePage() {
         </label>
 
         <div className="flex items-center gap-3">
-          <button onClick={handleSendInvites} className="bg-indigo-600 text-white px-5 py-2 rounded-lg hover:bg-indigo-700">
-            Send Access Invites
-          </button>
+          <button
+  onClick={handleSendInvites}
+  className="px-5 py-2 rounded-lg text-white bg-indigo-600 hover:bg-indigo-700"
+>
+  Send Access Invites
+</button>
+
+
         </div>
       </div>
     </div>

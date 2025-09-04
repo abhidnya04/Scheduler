@@ -1,4 +1,11 @@
+import React from "react";
+
 export default function Hero() {
+  const tryForFree = () => {
+    const email = ""; // optional, can leave empty or prefill
+    window.location.href = `http://127.0.0.1:8000/auth/google?email=${encodeURIComponent(email)}`;
+  };
+
   return (
     <section className="flex flex-col lg:flex-row items-center justify-between px-8 py-20 max-w-6xl mx-auto">
       <div className="lg:w-1/2 space-y-6">
@@ -6,18 +13,16 @@ export default function Hero() {
           Schedule meetings <span className="text-blue-600">effortlessly</span>
         </h2>
         <p className="text-lg text-gray-600">
-          Schedulr helps you sync with Google Calendar, share availability, 
-          and book meetings without back-and-forth emails.
+          Schedulr helps you sync with Google Calendar, share availability, and
+          book meetings without back-and-forth emails.
         </p>
         <div className="flex space-x-4">
           <button
-  onClick={() => {
-    window.location.href = "http://localhost:8000/auth/google";
-  }}
-  className="bg-blue-600 text-white px-6 py-3 rounded-lg text-lg hover:bg-blue-700"
->
-  Try for Free
-</button>
+            onClick={tryForFree}
+            className="bg-blue-600 text-white px-6 py-3 rounded-lg text-lg hover:bg-blue-700"
+          >
+            Try for Free
+          </button>
           <button className="border border-blue-600 text-blue-600 px-6 py-3 rounded-lg text-lg hover:bg-blue-50">
             Learn More
           </button>

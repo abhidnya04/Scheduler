@@ -4,11 +4,9 @@ import { useLocation } from "react-router-dom";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 
-
 export default function SchedulePage() {
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
-  const hostToken = queryParams.get("token"); // optional host token
   const loggedInUserId = queryParams.get("user_id");
 
   const [date, setDate] = useState(new Date());
@@ -19,25 +17,24 @@ export default function SchedulePage() {
   const [authorizedEmails, setAuthorizedEmails] = useState([]);
   const [hostEmail, setHostEmail] = useState("");
   const [loadingHost, setLoadingHost] = useState(true);
+  const [scheduling, setScheduling] = useState(false);
 
   // restore saved emails on first render
-useEffect(() => {
-  const savedEmails = localStorage.getItem("invite_emails");
-  if (savedEmails) {
-    setEmails(savedEmails);
-  }
-}, []);
+  useEffect(() => {
+    const savedEmails = localStorage.getItem("invite_emails");
+    if (savedEmails) {
+      setEmails(savedEmails);
+    }
+  }, []);
 
-// save emails whenever they change
-useEffect(() => {
-  if (emails) {
-    localStorage.setItem("invite_emails", emails);
-  } else {
-    localStorage.removeItem("invite_emails");
-  }
-}, [emails]);
-
-
+  // save emails whenever they change
+  useEffect(() => {
+    if (emails) {
+      localStorage.setItem("invite_emails", emails);
+    } else {
+      localStorage.removeItem("invite_emails");
+    }
+  }, [emails]);
 
   // When an invitee completes OAuth, they get redirected here with ?authorized=email
   useEffect(() => {
@@ -48,54 +45,57 @@ useEffect(() => {
         if (prev.includes(decoded)) return prev;
         return [...prev, decoded];
       });
-
-      // optionally remove the query param from URL afterwards (clean UX)
-      // history.replaceState(null, "", window.location.pathname + window.location.search.replace(/authorized=[^&]+&?/, ""));
     }
   }, [location.search]);
 
   // Fetch current logged-in user's email
   useEffect(() => {
-  if (loggedInUserId) {
-    fetch(`http://localhost:8000/users/${loggedInUserId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.email) {
-          setHostEmail(data.email);
-        }
-      })
-      .catch((err) => console.error("Failed to fetch host email:", err))
-      .finally(() => setLoadingHost(false));   // <-- NEW
-  } else {
-    setLoadingHost(false);   // if no loggedInUserId
-  }
-}, [loggedInUserId]);
+    if (loggedInUserId) {
+      fetch(`http://localhost:8000/users/${loggedInUserId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.email) setHostEmail(data.email);
+        })
+        .catch((err) => console.error("Failed to fetch host email:", err))
+        .finally(() => setLoadingHost(false));
+    } else {
+      setLoadingHost(false);
+    }
+  }, [loggedInUserId]);
 
- // Check which emails are already registered
+  // Check which emails are already registered
   useEffect(() => {
-    const list = emails.split(",").map(e => e.trim()).filter(Boolean);
-    list.forEach(email => {
-      fetch(`http://localhost:8000/users/by-email?email=${encodeURIComponent(email)}`)
-        .then(res => res.json())
-        .then(data => {
+    const list = emails
+      .split(",")
+      .map((e) => e.trim())
+      .filter(Boolean);
+
+    list.forEach((email) => {
+      fetch(
+        `http://localhost:8000/users/by-email?email=${encodeURIComponent(
+          email
+        )}`
+      )
+        .then((res) => res.json())
+        .then((data) => {
           if (data.email && !authorizedEmails.includes(data.email)) {
-            setAuthorizedEmails(prev => [...prev, data.email]);
+            setAuthorizedEmails((prev) => [...prev, data.email]);
           }
         })
         .catch(console.error);
     });
   }, [emails]);
 
-
   const handleSendInvites = async () => {
-    const list = emails.split(",").map((e) => e.trim()).filter(Boolean);
-    console.log({ list, loggedInUserId, payload: { emails: list, title, date: date.toISOString().split("T")[0], duration, slot_window: slotWindow, host_user_id: loggedInUserId } });
+    const list = emails
+      .split(",")
+      .map((e) => e.trim())
+      .filter(Boolean);
+
     if (!list.length) {
       alert("Enter at least one email");
       return;
     }
-
-    
 
     const payload = {
       emails: list,
@@ -109,12 +109,66 @@ useEffect(() => {
     const res = await fetch("http://localhost:8000/invites/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
 
     const data = await res.json();
     console.log("invites/send:", data);
     alert("Invite emails queued (check console for results).");
+  };
+
+  const inviteeList = emails
+    .split(",")
+    .map((e) => e.trim())
+    .filter(Boolean);
+
+  const isAllAuthorized =
+    inviteeList.length > 0 &&
+    inviteeList.every((e) => authorizedEmails.includes(e));
+
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  const handleScheduleMeeting = async () => {
+    if (!hostEmail) {
+      alert("Host email not loaded yet.");
+      return;
+    }
+    if (!isAllAuthorized) {
+      alert("All invitees must be authorized first.");
+      return;
+    }
+
+    setScheduling(true);
+    try {
+      const payload = {
+        emails: inviteeList,
+        title,
+        date: date.toISOString().split("T")[0],
+        duration,
+        slot_window: slotWindow,
+        host_email: hostEmail,
+        timezone,
+      };
+
+      const res = await fetch("http://localhost:8000/schedule-meeting", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (res.ok && data?.hangoutLink) {
+        alert(`Meeting scheduled!\n\nMeet link: ${data.hangoutLink}`);
+        window.open(data.hangoutLink, "_blank");
+      } else {
+        alert(data?.error || "Failed to schedule meeting.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Network error while scheduling meeting.");
+    } finally {
+      setScheduling(false);
+    }
   };
 
   return (
@@ -123,7 +177,11 @@ useEffect(() => {
       <div className="w-1/2 p-8 bg-gray-50 border-r">
         <h2 className="text-2xl font-bold mb-4">{title}</h2>
         <p className="mb-2">Duration: {duration} min</p>
-        <p className="mb-2">{slotWindow === "before_lunch" ? "Before Lunch (9–12:30)" : "After Lunch (13:30–18:00)"}</p>
+        <p className="mb-2">
+          {slotWindow === "before_lunch"
+            ? "Before Lunch (9–12:30)"
+            : "After Lunch (13:30–18:00)"}
+        </p>
         <p className="mb-2">Members:</p>
         <ul>
           {emails.split(",").map((raw) => {
@@ -132,7 +190,12 @@ useEffect(() => {
             const isAuthorized = authorizedEmails.includes(e);
             return (
               <li key={e}>
-                {e} {isAuthorized ? <span className="text-green-600">✅ Authorized</span> : <span className="text-red-500">❌ Not authorized</span>}
+                {e}{" "}
+                {isAuthorized ? (
+                  <span className="text-green-600">✅ Authorized</span>
+                ) : (
+                  <span className="text-red-500">❌ Not authorized</span>
+                )}
               </li>
             );
           })}
@@ -146,12 +209,20 @@ useEffect(() => {
 
         <label className="block mb-4">
           <span className="text-gray-700">Title</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full border p-2 rounded mt-1" />
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full border p-2 rounded mt-1"
+          />
         </label>
 
         <label className="block mb-4">
           <span className="text-gray-700">Duration</span>
-          <select value={duration} onChange={(e) => setDuration(parseInt(e.target.value))} className="w-full border p-2 rounded mt-1">
+          <select
+            value={duration}
+            onChange={(e) => setDuration(parseInt(e.target.value))}
+            className="w-full border p-2 rounded mt-1"
+          >
             <option value={30}>30 min</option>
             <option value={45}>45 min</option>
             <option value={60}>60 min</option>
@@ -160,26 +231,46 @@ useEffect(() => {
 
         <label className="block mb-4">
           <span className="text-gray-700">Slot Window</span>
-          <select value={slotWindow} onChange={(e) => setSlotWindow(e.target.value)} className="w-full border p-2 rounded mt-1">
+          <select
+            value={slotWindow}
+            onChange={(e) => setSlotWindow(e.target.value)}
+            className="w-full border p-2 rounded mt-1"
+          >
             <option value="before_lunch">Before Lunch</option>
             <option value="after_lunch">After Lunch</option>
           </select>
         </label>
 
         <label className="block mb-4">
-          <span className="text-gray-700">Invitee Emails (comma separated)</span>
-          <input value={emails} onChange={(e) => setEmails(e.target.value)} className="w-full border p-2 rounded mt-1" />
+          <span className="text-gray-700">
+            Invitee Emails (comma separated)
+          </span>
+          <input
+            value={emails}
+            onChange={(e) => setEmails(e.target.value)}
+            className="w-full border p-2 rounded mt-1"
+          />
         </label>
 
         <div className="flex items-center gap-3">
           <button
-  onClick={handleSendInvites}
-  className="px-5 py-2 rounded-lg text-white bg-indigo-600 hover:bg-indigo-700"
->
-  Send Access Invites
-</button>
+            onClick={handleSendInvites}
+            className="px-5 py-2 rounded-lg text-white bg-indigo-600 hover:bg-indigo-700"
+          >
+            Send Access Invites
+          </button>
 
-
+          <button
+            onClick={handleScheduleMeeting}
+            disabled={!isAllAuthorized || !hostEmail || scheduling}
+            className={`px-5 py-2 rounded-lg text-white ${
+              isAllAuthorized && hostEmail && !scheduling
+                ? "bg-emerald-600 hover:bg-emerald-700"
+                : "bg-gray-300 cursor-not-allowed"
+            }`}
+          >
+            {scheduling ? "Scheduling..." : "Schedule Meeting"}
+          </button>
         </div>
       </div>
     </div>

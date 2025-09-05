@@ -242,15 +242,16 @@
 
 
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from google_auth_oauthlib.flow import Flow
 from dotenv import load_dotenv
 import os
 from supabase import create_client
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel,  EmailStr
 from email.mime.text import MIMEText
 import smtplib
+from scheduler import schedule_meeting as schedule_meeting_core
 
 import urllib.parse
 from fastapi.middleware.cors import CORSMiddleware
@@ -289,7 +290,10 @@ SCOPES = [
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
-    "https://www.googleapis.com/auth/calendar.events",  # read/write calendar events
+    "https://www.googleapis.com/auth/calendar.events", 
+      # read/write calendar events
+    "https://www.googleapis.com/auth/calendar", 
+    "https://www.googleapis.com/auth/meetings.space.created",
 ]
 
 
@@ -448,3 +452,38 @@ def get_user(user_id: str):
     if user_data.data:
         return {"email": user_data.data[0]["email"]}
     return {"email": None}
+
+
+class ScheduleBody(BaseModel):
+    emails: list[EmailStr]        # invitees (no host here)
+    title: str
+    date: str                     # "YYYY-MM-DD"
+    duration: int                 # minutes
+    slot_window: str              # "before_lunch" | "after_lunch"
+    host_email: EmailStr
+    timezone: str | None = "Asia/Kolkata"  # e.g. "Asia/Kolkata", "America/New_York"
+
+@app.post("/schedule-meeting")
+def schedule_meeting_api(body: ScheduleBody):
+    # Combine host + invitees
+    participants = list({body.host_email, *[e for e in body.emails]})
+
+    # Quick server-side safety check: ensure everyone is authorized in Supabase
+    for e in participants:
+        exists = supabase.table("users").select("id").eq("email", e).execute().data
+        if not exists:
+            return JSONResponse(status_code=400, content={"error": f"{e} is not authorized."})
+
+    try:
+        result = schedule_meeting_core(
+            participants_emails=participants,
+            date_str=body.date,
+            duration_minutes=body.duration,
+            slot_window=body.slot_window,
+            summary=body.title,
+            timezone_name=body.timezone or "UTC",
+            organizer_email=body.host_email,
+        )
+        return result
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})

@@ -41,10 +41,20 @@ export default function SchedulePage() {
     const authorized = queryParams.get("authorized");
     if (authorized) {
       const decoded = decodeURIComponent(authorized);
+
       setAuthorizedEmails((prev) => {
         if (prev.includes(decoded)) return prev;
         return [...prev, decoded];
       });
+
+      // ✅ Clear the text field
+      setEmails("");
+
+      // ✅ Remove saved emails from localStorage
+      localStorage.removeItem("invite_emails");
+
+      // ✅ Clean up URL (remove ?authorized=...)
+      window.history.replaceState({}, "", location.pathname);
     }
   }, [location.search]);
 
@@ -100,7 +110,8 @@ export default function SchedulePage() {
     const payload = {
       emails: list,
       title,
-      date: date.toISOString().split("T")[0],
+      date: date.toLocaleDateString("en-CA"), // gives YYYY-MM-DD in local timezone
+
       duration,
       slot_window: slotWindow,
       host_email: hostEmail || "host@example.com",
@@ -117,10 +128,15 @@ export default function SchedulePage() {
     alert("Invite emails queued (check console for results).");
   };
 
-  const inviteeList = emails
-    .split(",")
-    .map((e) => e.trim())
-    .filter(Boolean);
+  const inviteeList = [
+    ...new Set([
+      ...emails
+        .split(",")
+        .map((e) => e.trim())
+        .filter(Boolean),
+      ...authorizedEmails, // keep already authorized users
+    ]),
+  ];
 
   const isAllAuthorized =
     inviteeList.length > 0 &&
@@ -143,7 +159,7 @@ export default function SchedulePage() {
       const payload = {
         emails: inviteeList,
         title,
-        date: date.toISOString().split("T")[0],
+        date: date.toLocaleDateString("en-CA"), // gives YYYY-MM-DD in local timezone
         duration,
         slot_window: slotWindow,
         host_email: hostEmail,
@@ -171,11 +187,20 @@ export default function SchedulePage() {
     }
   };
 
+  const formattedDate = date.toLocaleDateString(undefined, {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
   return (
     <div className="flex min-h-screen">
       {/* Left Preview */}
       <div className="w-1/2 p-8 bg-gray-50 border-r">
         <h2 className="text-2xl font-bold mb-4">{title}</h2>
+        {/* ✅ Display Selected Date */}
+        <p className="mb-4 text-gray-800 font-medium">Date: {formattedDate}</p>
         <p className="mb-2">Duration: {duration} min</p>
         <p className="mb-2">
           {slotWindow === "before_lunch"
@@ -184,9 +209,7 @@ export default function SchedulePage() {
         </p>
         <p className="mb-2">Members:</p>
         <ul>
-          {emails.split(",").map((raw) => {
-            const e = raw.trim();
-            if (!e) return null;
+          {inviteeList.map((e) => {
             const isAuthorized = authorizedEmails.includes(e);
             return (
               <li key={e}>

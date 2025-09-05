@@ -148,8 +148,9 @@ def schedule_meeting(
 
     event = {
         "summary": summary,
-        "start": {"dateTime": slot_start.isoformat(), "timeZone": "UTC"},
-        "end": {"dateTime": slot_end.isoformat(), "timeZone": "UTC"},
+        "start": {"dateTime": slot_start.isoformat(), "timeZone": timezone_name},
+"end": {"dateTime": slot_end.isoformat(), "timeZone": timezone_name},
+
         "attendees": [{"email": e} for e in participants_emails],
         "conferenceData": {"createRequest": {"requestId": f"meet-{int(datetime.now(tz=timezone.utc).timestamp())}"}},
     }

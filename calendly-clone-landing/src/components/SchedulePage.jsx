@@ -3,7 +3,6 @@ import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
-import "./calender-theme.css";
 
 
 export default function SchedulePage() {
@@ -21,11 +20,8 @@ export default function SchedulePage() {
   const [hostEmail, setHostEmail] = useState("");
   const [loadingHost, setLoadingHost] = useState(true);
 
-  
   // restore saved emails on first render
-
-  
-  useEffect(() => {
+useEffect(() => {
   const savedEmails = localStorage.getItem("invite_emails");
   if (savedEmails) {
     setEmails(savedEmails);
@@ -43,16 +39,16 @@ useEffect(() => {
 
 
 
-// When an invitee completes OAuth, they get redirected here with ?authorized=email
-useEffect(() => {
-  const authorized = queryParams.get("authorized");
-  if (authorized) {
+  // When an invitee completes OAuth, they get redirected here with ?authorized=email
+  useEffect(() => {
+    const authorized = queryParams.get("authorized");
+    if (authorized) {
       const decoded = decodeURIComponent(authorized);
       setAuthorizedEmails((prev) => {
         if (prev.includes(decoded)) return prev;
         return [...prev, decoded];
       });
-      
+
       // optionally remove the query param from URL afterwards (clean UX)
       // history.replaceState(null, "", window.location.pathname + window.location.search.replace(/authorized=[^&]+&?/, ""));
     }
@@ -62,35 +58,35 @@ useEffect(() => {
   useEffect(() => {
   if (loggedInUserId) {
     fetch(`http://localhost:8000/users/${loggedInUserId}`)
-    .then((res) => res.json())
-    .then((data) => {
-      if (data?.email) {
-        setHostEmail(data.email);
-      }
-    })
-    .catch((err) => console.error("Failed to fetch host email:", err))
-    .finally(() => setLoadingHost(false));   // <-- NEW
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.email) {
+          setHostEmail(data.email);
+        }
+      })
+      .catch((err) => console.error("Failed to fetch host email:", err))
+      .finally(() => setLoadingHost(false));   // <-- NEW
   } else {
     setLoadingHost(false);   // if no loggedInUserId
   }
 }, [loggedInUserId]);
 
-// Check which emails are already registered
-useEffect(() => {
-  const list = emails.split(",").map(e => e.trim()).filter(Boolean);
-  list.forEach(email => {
-    fetch(`http://localhost:8000/users/by-email?email=${encodeURIComponent(email)}`)
-    .then(res => res.json())
-    .then(data => {
-      if (data.email && !authorizedEmails.includes(data.email)) {
-        setAuthorizedEmails(prev => [...prev, data.email]);
-      }
-    })
-    .catch(console.error);
-  });
+ // Check which emails are already registered
+  useEffect(() => {
+    const list = emails.split(",").map(e => e.trim()).filter(Boolean);
+    list.forEach(email => {
+      fetch(`http://localhost:8000/users/by-email?email=${encodeURIComponent(email)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.email && !authorizedEmails.includes(data.email)) {
+            setAuthorizedEmails(prev => [...prev, data.email]);
+          }
+        })
+        .catch(console.error);
+    });
   }, [emails]);
 
-  
+
   const handleSendInvites = async () => {
     const list = emails.split(",").map((e) => e.trim()).filter(Boolean);
     console.log({ list, loggedInUserId, payload: { emails: list, title, date: date.toISOString().split("T")[0], duration, slot_window: slotWindow, host_user_id: loggedInUserId } });
@@ -98,9 +94,9 @@ useEffect(() => {
       alert("Enter at least one email");
       return;
     }
+
     
-    
-    
+
     const payload = {
       emails: list,
       title,
@@ -109,18 +105,18 @@ useEffect(() => {
       slot_window: slotWindow,
       host_email: hostEmail || "host@example.com",
     };
-    
+
     const res = await fetch("http://localhost:8000/invites/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
-    
+
     const data = await res.json();
     console.log("invites/send:", data);
     alert("Invite emails queued (check console for results).");
   };
-  
+
   return (
     <div className="flex min-h-screen">
       {/* Left Preview */}
@@ -141,7 +137,7 @@ useEffect(() => {
             );
           })}
         </ul>
-        <Calendar value={date} onChange={setDate} className="custom-calendar mt-6" />
+        <Calendar value={date} onChange={setDate} />
       </div>
 
       {/* Right Form */}
@@ -189,14 +185,3 @@ useEffect(() => {
     </div>
   );
 }
-
-// ui testing dummy data
-
-// const [date, setDate] = useState(new Date());
-// const [title, setTitle] = useState("New Meeting");
-// const [duration, setDuration] = useState(30);
-// const [slotWindow, setSlotWindow] = useState("before_lunch");
-// const [emails, setEmails] = useState("alice@example.com, bob@example.com");
-// const [authorizedEmails, setAuthorizedEmails] = useState(["alice@example.com"]);
-// const [hostEmail, setHostEmail] = useState("host@example.com");
-// const [loadingHost, setLoadingHost] = useState(false);

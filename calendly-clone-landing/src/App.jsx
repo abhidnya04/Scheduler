@@ -1,10 +1,11 @@
-import { Routes, Route } from "react-router-dom";
-import Navbar from "./components/Navbar";
-import Hero from "./components/Hero";
-import Features from "./components/Features";
+import { Route, Routes } from "react-router-dom";
 import CTA from "./components/CTA";
+import Features from "./components/Features";
 import Footer from "./components/Footer";
+import Hero from "./components/Hero";
+import Navbar from "./components/Navbar";
 
+import Dashboard from "./components/Dashboard";
 import SchedulePage from "./components/SchedulePage";
 
 export default function App() {
@@ -26,6 +27,9 @@ export default function App() {
         }
       />
 
+      {/* Dashboard */}
+      <Route path="/dashboard" element={<Dashboard />} />
+      
       {/* Landing Page after login */}
       <Route path="/schedule" element={<SchedulePage />} />
     </Routes>

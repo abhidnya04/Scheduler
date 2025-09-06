@@ -3,7 +3,7 @@ import React from "react";
 export default function Hero() {
   const tryForFree = () => {
     const email = ""; // optional, can leave empty or prefill
-    window.location.href = `http://127.0.0.1:8000/auth/google?email=${encodeURIComponent(email)}`;
+    window.location.href = `http://127.0.0.1:8000/auth/google?email=${encodeURIComponent(email)}&redirect_url=${encodeURIComponent('http://localhost:5173/dashboard')}`;
   };
 
   return (

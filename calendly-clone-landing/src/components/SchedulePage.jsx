@@ -1,8 +1,9 @@
 // src/components/SchedulePage.jsx
-import { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
+import { useLocation } from "react-router-dom";
+import "./calendar-style.css";
 
 export default function SchedulePage() {
   const location = useLocation();
@@ -18,6 +19,8 @@ export default function SchedulePage() {
   const [hostEmail, setHostEmail] = useState("");
   const [loadingHost, setLoadingHost] = useState(true);
   const [scheduling, setScheduling] = useState(false);
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [selectedSlot, setSelectedSlot] = useState(null);
 
   // restore saved emails on first render
   useEffect(() => {
@@ -95,6 +98,46 @@ export default function SchedulePage() {
         .catch(console.error);
     });
   }, [emails]);
+
+  // ----- Dummy Slots Generation (UI only) -----
+  const minutesToTimeString = (totalMinutes) => {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const d = new Date();
+    d.setHours(hours, minutes, 0, 0);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
+
+  const getWindowRangeMinutes = (windowKey) => {
+    // Returns [startMin, endMin) in minutes from 00:00
+    if (windowKey === "before_lunch") {
+      // 09:00 → 12:30
+      return [9 * 60, 12 * 60 + 30];
+    }
+    // after lunch: 13:30 → 18:00
+    return [13 * 60 + 30, 18 * 60];
+  };
+
+  const generateDummySlots = (currentDate, slotDuration, windowKey) => {
+    const [startMin, endMin] = getWindowRangeMinutes(windowKey);
+    const slots = [];
+    for (let start = startMin; start + slotDuration <= endMin; start += slotDuration) {
+      const end = start + slotDuration;
+      slots.push({
+        id: `${currentDate.toDateString()}-${start}-${slotDuration}-${windowKey}`,
+        start,
+        end,
+        label: `${minutesToTimeString(start)} – ${minutesToTimeString(end)}`,
+      });
+    }
+    return slots;
+  };
+
+  useEffect(() => {
+    setSelectedSlot(null);
+    const slots = generateDummySlots(date, duration, slotWindow);
+    setAvailableSlots(slots);
+  }, [date, duration, slotWindow]);
 
   const handleSendInvites = async () => {
     const list = emails
@@ -223,7 +266,46 @@ export default function SchedulePage() {
             );
           })}
         </ul>
-        <Calendar value={date} onChange={setDate} />
+        <Calendar className="custom-calendar" value={date} onChange={setDate} />
+
+        {/* ----- Available Slots (Dummy UI) ----- */}
+        <div className="mt-6">
+          <div className="flex items-baseline justify-between mb-2">
+            <h4 className="text-lg font-semibold">Available time slots</h4>
+            <span className="text-sm text-gray-500">
+              {slotWindow === "before_lunch" ? "Before lunch" : "After lunch"} · {duration} min
+            </span>
+          </div>
+
+          {availableSlots.length === 0 ? (
+            <p className="text-gray-500">No slots available for this configuration.</p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {availableSlots.map((slot) => {
+                const isSelected = selectedSlot && selectedSlot.id === slot.id;
+                return (
+                  <button
+                    key={slot.id}
+                    onClick={() => setSelectedSlot(slot)}
+                    className={`px-3 py-2 rounded-full border text-sm transition-colors ${
+                      isSelected
+                        ? "bg-indigo-600 text-white border-indigo-600"
+                        : "bg-white text-gray-800 border-gray-300 hover:border-indigo-400 hover:bg-indigo-100 hover:text-indigo-900"
+                    }`}
+                  >
+                    {slot.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {selectedSlot && (
+            <div className="mt-3 text-sm text-gray-700">
+              Selected: <span className="font-medium">{selectedSlot.label}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Right Form */}

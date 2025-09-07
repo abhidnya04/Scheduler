@@ -257,7 +257,7 @@ export default function SchedulePage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Title Row */}
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-1">Schedule a Meeting</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-1">{title || "Schedule a Meeting"}</h2>
           <p className="text-gray-600">Pick a date, choose a slot, and add participants.</p>
         </div>
 

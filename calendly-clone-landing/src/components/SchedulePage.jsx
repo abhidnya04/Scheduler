@@ -1,4 +1,5 @@
 // src/components/SchedulePage.jsx
+import { CalendarIcon, ClockIcon, EnvelopeIcon, UserGroupIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
@@ -238,146 +239,191 @@ export default function SchedulePage() {
   });
 
   return (
-    <div className="flex min-h-screen">
-      {/* Left Preview */}
-      <div className="w-1/2 p-8 bg-gray-50 border-r">
-        <h2 className="text-2xl font-bold mb-4">{title}</h2>
-        {/* ✅ Display Selected Date */}
-        <p className="mb-4 text-gray-800 font-medium">Date: {formattedDate}</p>
-        <p className="mb-2">Duration: {duration} min</p>
-        <p className="mb-2">
-          {slotWindow === "before_lunch"
-            ? "Before Lunch (9–12:30)"
-            : "After Lunch (13:30–18:00)"}
-        </p>
-        <p className="mb-2">Members:</p>
-        <ul>
-          {inviteeList.map((e) => {
-            const isAuthorized = authorizedEmails.includes(e);
-            return (
-              <li key={e}>
-                {e}{" "}
-                {isAuthorized ? (
-                  <span className="text-green-600">✅ Authorized</span>
-                ) : (
-                  <span className="text-red-500">❌ Not authorized</span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-        <Calendar className="custom-calendar" value={date} onChange={setDate} />
-
-        {/* ----- Available Slots (Dummy UI) ----- */}
-        <div className="mt-6">
-          <div className="flex items-baseline justify-between mb-2">
-            <h4 className="text-lg font-semibold">Available time slots</h4>
-            <span className="text-sm text-gray-500">
-              {slotWindow === "before_lunch" ? "Before lunch" : "After lunch"} · {duration} min
-            </span>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div className="flex items-center gap-2">
+              {/* <CalendarIcon className="w-7 h-7 text-blue-600" /> */}
+              <h1 className="text-3xl font-bold text-blue-600">Schedulr</h1>
+            </div>
+            <div className="text-sm text-gray-500">{hostEmail || ""}</div>
           </div>
+        </div>
+      </header>
 
-          {availableSlots.length === 0 ? (
-            <p className="text-gray-500">No slots available for this configuration.</p>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {availableSlots.map((slot) => {
-                const isSelected = selectedSlot && selectedSlot.id === slot.id;
-                return (
-                  <button
-                    key={slot.id}
-                    onClick={() => setSelectedSlot(slot)}
-                    className={`px-3 py-2 rounded-full border text-sm transition-colors ${
-                      isSelected
-                        ? "bg-indigo-600 text-white border-indigo-600"
-                        : "bg-white text-gray-800 border-gray-300 hover:border-indigo-400 hover:bg-indigo-100 hover:text-indigo-900"
-                    }`}
+      {/* Main */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Title Row */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-1">Schedule a Meeting</h2>
+          <p className="text-gray-600">Pick a date, choose a slot, and add participants.</p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left: Calendar + Slots */}
+          <section className="bg-white rounded-lg shadow-sm border">
+            <div className="px-6 py-4 border-b flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <CalendarIcon className="w-5 h-5 text-gray-700" />
+                  <h3 className="text-lg font-semibold text-gray-900">Availability</h3>
+                </div>
+                <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+                  <span className="inline-flex items-center gap-1"><CalendarIcon className="w-4 h-4" />{formattedDate}</span>
+                  <span className="inline-flex items-center gap-1"><ClockIcon className="w-4 h-4" />{duration} min</span>
+                  <span className="inline-flex items-center gap-1"><ClockIcon className="w-4 h-4" />{slotWindow === "before_lunch" ? "Before lunch" : "After lunch"}</span>
+                </div>
+              </div>
+            </div>
+            <div className="p-6">
+              <Calendar className="custom-calendar" value={date} onChange={setDate} />
+
+              {/* Slots */}
+              <div className="mt-6">
+                <div className="flex items-baseline justify-between mb-3">
+                  <div className="inline-flex items-center gap-2">
+                    <ClockIcon className="w-5 h-5 text-gray-700" />
+                    <h4 className="text-md font-semibold text-gray-900">Available time slots</h4>
+                  </div>
+                  <span className="text-sm text-gray-500">
+                    {slotWindow === "before_lunch" ? "Before lunch" : "After lunch"} · {duration} min
+                  </span>
+                </div>
+
+                {availableSlots.length === 0 ? (
+                  <p className="text-gray-500">No slots available for this configuration.</p>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {availableSlots.map((slot) => {
+                      const isSelected = selectedSlot && selectedSlot.id === slot.id;
+                      return (
+                        <button
+                          key={slot.id}
+                          onClick={() => setSelectedSlot(slot)}
+                          className={`px-3 py-2 rounded-full border text-sm transition-colors ${
+                            isSelected
+                              ? "bg-indigo-600 text-white border-indigo-600"
+                              : "bg-white text-gray-800 border-gray-300 hover:border-indigo-400 hover:bg-indigo-100 hover:text-indigo-900"
+                          }`}
+                        >
+                          {slot.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {selectedSlot && (
+                  <div className="mt-3 text-sm text-gray-700">
+                    Selected: <span className="font-medium">{selectedSlot.label}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* Right: Meeting Details */}
+          <section className="bg-white rounded-lg shadow-sm border">
+            <div className="px-6 py-4 border-b">
+              <div className="flex items-center gap-2">
+                <UserGroupIcon className="w-5 h-5 text-gray-700" />
+                <h3 className="text-lg font-semibold text-gray-900">Meeting Details</h3>
+              </div>
+            </div>
+            <div className="p-6">
+              <label className="block mb-4">
+                <span className="text-gray-700">Title</span>
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full border p-2 rounded mt-1"
+                />
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label className="block mb-2 sm:mb-0">
+                  <span className="text-gray-700">Duration</span>
+                  <select
+                    value={duration}
+                    onChange={(e) => setDuration(parseInt(e.target.value))}
+                    className="w-full border p-2 rounded mt-1"
                   >
-                    {slot.label}
-                  </button>
-                );
-              })}
+                    <option value={30}>30 min</option>
+                    <option value={45}>45 min</option>
+                    <option value={60}>60 min</option>
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="text-gray-700">Slot Window</span>
+                  <select
+                    value={slotWindow}
+                    onChange={(e) => setSlotWindow(e.target.value)}
+                    className="w-full border p-2 rounded mt-1"
+                  >
+                    <option value="before_lunch">Before Lunch</option>
+                    <option value="after_lunch">After Lunch</option>
+                  </select>
+                </label>
+              </div>
+
+              <label className="block mt-4 mb-4">
+                <span className="text-gray-700">Invitee Emails (comma separated)</span>
+                <input
+                  value={emails}
+                  onChange={(e) => setEmails(e.target.value)}
+                  className="w-full border p-2 rounded mt-1"
+                  placeholder="alice@example.com, bob@example.com"
+                />
+              </label>
+
+              <div className="mb-4">
+                <span className="text-gray-700 inline-flex items-center gap-2"><UserGroupIcon className="w-4 h-4" />Participants</span>
+                <ul className="mt-2 space-y-1">
+                  {inviteeList.map((e) => {
+                    const isAuthorized = authorizedEmails.includes(e);
+                    return (
+                      <li key={e} className="text-sm text-gray-700">
+                        {e}{" "}
+                        {isAuthorized ? (
+                          <span className="text-green-600">✅ Authorized</span>
+                        ) : (
+                          <span className="text-red-500">❌ Not authorized</span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={handleSendInvites}
+                  className="px-5 py-2 rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 inline-flex items-center gap-2"
+                >
+                  <EnvelopeIcon className="w-5 h-5" />
+                  Send Access Invites
+                </button>
+
+                <button
+                  onClick={handleScheduleMeeting}
+                  disabled={!isAllAuthorized || !hostEmail || scheduling}
+                  className={`px-5 py-2 rounded-lg text-white inline-flex items-center gap-2 ${
+                    isAllAuthorized && hostEmail && !scheduling
+                      ? "bg-emerald-600 hover:bg-emerald-700"
+                      : "bg-gray-300 cursor-not-allowed"
+                  }`}
+                >
+                  <CalendarIcon className="w-5 h-5" />
+                  {scheduling ? "Scheduling..." : "Schedule Meeting"}
+                </button>
+              </div>
             </div>
-          )}
-
-          {selectedSlot && (
-            <div className="mt-3 text-sm text-gray-700">
-              Selected: <span className="font-medium">{selectedSlot.label}</span>
-            </div>
-          )}
+          </section>
         </div>
-      </div>
-
-      {/* Right Form */}
-      <div className="w-1/2 p-8">
-        <h3 className="text-xl font-bold mb-6">Meeting Details</h3>
-
-        <label className="block mb-4">
-          <span className="text-gray-700">Title</span>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full border p-2 rounded mt-1"
-          />
-        </label>
-
-        <label className="block mb-4">
-          <span className="text-gray-700">Duration</span>
-          <select
-            value={duration}
-            onChange={(e) => setDuration(parseInt(e.target.value))}
-            className="w-full border p-2 rounded mt-1"
-          >
-            <option value={30}>30 min</option>
-            <option value={45}>45 min</option>
-            <option value={60}>60 min</option>
-          </select>
-        </label>
-
-        <label className="block mb-4">
-          <span className="text-gray-700">Slot Window</span>
-          <select
-            value={slotWindow}
-            onChange={(e) => setSlotWindow(e.target.value)}
-            className="w-full border p-2 rounded mt-1"
-          >
-            <option value="before_lunch">Before Lunch</option>
-            <option value="after_lunch">After Lunch</option>
-          </select>
-        </label>
-
-        <label className="block mb-4">
-          <span className="text-gray-700">
-            Invitee Emails (comma separated)
-          </span>
-          <input
-            value={emails}
-            onChange={(e) => setEmails(e.target.value)}
-            className="w-full border p-2 rounded mt-1"
-          />
-        </label>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleSendInvites}
-            className="px-5 py-2 rounded-lg text-white bg-indigo-600 hover:bg-indigo-700"
-          >
-            Send Access Invites
-          </button>
-
-          <button
-            onClick={handleScheduleMeeting}
-            disabled={!isAllAuthorized || !hostEmail || scheduling}
-            className={`px-5 py-2 rounded-lg text-white ${
-              isAllAuthorized && hostEmail && !scheduling
-                ? "bg-emerald-600 hover:bg-emerald-700"
-                : "bg-gray-300 cursor-not-allowed"
-            }`}
-          >
-            {scheduling ? "Scheduling..." : "Schedule Meeting"}
-          </button>
-        </div>
-      </div>
+      </main>
     </div>
   );
 }

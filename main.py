@@ -262,7 +262,7 @@ load_dotenv()
 app = FastAPI()
 
 
-
+#lets frontend talk to backend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # or ["http://localhost:5173"] for security
@@ -288,12 +288,11 @@ BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
 # OAuth scopes
 SCOPES = [
     "openid",
-    "https://www.googleapis.com/auth/userinfo.email",
-    "https://www.googleapis.com/auth/userinfo.profile",
-    "https://www.googleapis.com/auth/calendar.events", 
-      # read/write calendar events
+    "https://www.googleapis.com/auth/userinfo.email", #access to users email address (store in supabase to identify authorized/unauthorized)
+    "https://www.googleapis.com/auth/userinfo.profile", #acess to userinfo(name,profile picture,..)
+    "https://www.googleapis.com/auth/calendar.events",  #acess to calender events# read/write calendar events
     "https://www.googleapis.com/auth/calendar", 
-    "https://www.googleapis.com/auth/meetings.space.created",
+    "https://www.googleapis.com/auth/meetings.space.created", #create google meet without needing to create calender event
 ]
 
 
@@ -306,19 +305,20 @@ def google_login(invitee_email: str = Query(None)):
                 "web": {
                     "client_id": GOOGLE_CLIENT_ID,
                     "client_secret": GOOGLE_CLIENT_SECRET,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [REDIRECT_URI]
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",#where to send user for login/consent.
+                    "token_uri": "https://oauth2.googleapis.com/token",#where to exchange the code for tokens.
+                    "redirect_uris": [REDIRECT_URI] #after login it will send to this url(google/callback)
                 }
             },
-            scopes=SCOPES,
+            scopes=SCOPES,#will show permissions you are asking for(calender,email,..)
             redirect_uri=REDIRECT_URI
         )
-    
+
+    # generates google consent/login url
     authorization_url, state = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
-        prompt="consent"  # always ask for consent
+        # prompt="consent"  # asks for consent each time user logs in
     )
 
       # Append the invitee_email to state or redirect URL
@@ -327,7 +327,8 @@ def google_login(invitee_email: str = Query(None)):
 
     return RedirectResponse(authorization_url)
 
-# Callback route after Google login
+
+# Callback route after Google login(where to go after login(granting permissions))
 @app.get("/auth/callback")
 def google_callback(request: Request):
     try:
@@ -360,7 +361,7 @@ def google_callback(request: Request):
             params={"alt": "json"},
             headers={"Authorization": f"Bearer {access_token}"}
         )
-        user_info = resp.json()
+        user_info = resp.json() # Converts the JSON response into a Python dictionary.
         email = user_info.get("email")
 
         if not email:
@@ -375,7 +376,7 @@ def google_callback(request: Request):
             "token_expiry": token_expiry_str
         }
 
-        # Insert or update user in Supabase
+        # upsert -> Insert or update user in Supabase
         result = supabase.table("users").upsert(data, on_conflict="email").execute()
 
        # Check for errors
@@ -423,16 +424,17 @@ def send_invites(payload: InvitePayload):
 
         Meeting: {payload.title} on {payload.date} ({payload.duration} min)
         """
-        msg = MIMEText(body)
-        msg["Subject"] = f"Invite to {payload.title}"
+        msg = MIMEText(body) # MIMEText converts the body to a proper email format.
+        msg["Subject"] = f"Invite to {payload.title}" #Sets subject, from, and to fields.
         msg["From"] = SMTP_USER
         msg["To"] = email
 
         try:
+            #SMTP() → connects to your email server.
             with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-                server.starttls()
-                server.login(SMTP_USER, SMTP_PASS)
-                server.sendmail(SMTP_USER, email, msg.as_string())
+                server.starttls() # encrypts the connection (secure).
+                server.login(SMTP_USER, SMTP_PASS) # authenticate with email credentials.
+                server.sendmail(SMTP_USER, email, msg.as_string()) # sends the email.
         except Exception as e:
             print(f"Failed to send email to {email}: {e}")
 

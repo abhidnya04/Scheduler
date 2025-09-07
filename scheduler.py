@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Supabase (server-side service key)
+# Supabase (server-side service key) to get users stored oauth tokens
 supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
 
 # Use the broad Calendar scope so we can both read availability and create events.
@@ -28,18 +28,23 @@ def _creds_for(email: str) -> Credentials:
         token=u["access_token"],
         refresh_token=u["refresh_token"],
         token_uri="https://oauth2.googleapis.com/token",
-        client_id=os.getenv("GOOGLE_CLIENT_ID"),
+        client_id=os.getenv("GOOGLE_CLIENT_ID"), #needed for token refresh
         client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
         scopes=GOOGLE_SCOPES,
     )
+
+    #if access token expires
     if not creds.valid and creds.refresh_token:
-        creds.refresh(Request())
+        #request (class) that acts as http transport adapter (it acts as a helper to help credentials talk to google to get new token)
+        creds.refresh(Request()) #sends request to google to get new access token
+        #stores new token and expiry in supabase
         supabase.table("users").update({
             "access_token": creds.token,
             "token_expiry": creds.expiry.isoformat() if creds.expiry else None,
         }).eq("email", email).execute()
     return creds
 
+#returns start and end time for the slot window(after lunch/before lunch)
 def _slot_window_bounds(date_str: str, slot_window: str, tz_name: str) -> Tuple[datetime, datetime]:
     """Return the local start/end datetimes for the chosen window on the given day."""
     # Force everything to Asia/Kolkata
@@ -56,6 +61,7 @@ def _slot_window_bounds(date_str: str, slot_window: str, tz_name: str) -> Tuple[
         end_local   = datetime(y, m, d, 12, 30, tzinfo=tz)
     return start_local, end_local
 
+#to find busy time withing a time window
 def _freebusy(service, start_dt_local: datetime, end_dt_local: datetime, tz_name: str) -> List[Dict]:
     """Call Google FreeBusy API for the primary calendar within the given window."""
     body = {
@@ -67,6 +73,7 @@ def _freebusy(service, start_dt_local: datetime, end_dt_local: datetime, tz_name
     resp = service.freebusy().query(body=body).execute()
     return resp["calendars"]["primary"]["busy"]
 
+# When scheduling meetings, this ensures that start times align with standard 15-minute slots (like 9:00, 9:15, 9:30, etc.),
 def _round_up_to_quarter(dt: datetime) -> datetime:
     """Round datetime up to the next 15-min slot."""
     discard = dt.minute % 15
@@ -74,13 +81,15 @@ def _round_up_to_quarter(dt: datetime) -> datetime:
         return dt
     return (dt.replace(second=0, microsecond=0, minute=dt.minute - discard) + timedelta(minutes=15))
 
+# Find the first free gap starting *after now* and aligned to 15-min slots
 def _find_first_free_gap(
     busy_intervals_utc: List[Tuple[datetime, datetime]],
     window_start_utc: datetime,
     window_end_utc: datetime,
     duration_minutes: int,
 ) -> Tuple[datetime, datetime] | Tuple[None, None]:
-    """Find the first free gap starting *after now* and aligned to 15-min slots."""
+
+    # current time in utc
     now_utc = datetime.now(timezone.utc)
 
     # Start at max(window_start, now), rounded up to 15-min boundary
@@ -88,12 +97,12 @@ def _find_first_free_gap(
     need = timedelta(minutes=duration_minutes)
 
     # Clip busy intervals to window
-    intervals = []
+    intervals = [] # stores busy intervals
     for s, e in busy_intervals_utc:
         if e <= window_start_utc or s >= window_end_utc:
             continue
-        intervals.append((max(s, window_start_utc), min(e, window_end_utc)))
-    intervals.sort(key=lambda x: x[0])
+        intervals.append((max(s, window_start_utc), min(e, window_end_utc))) # clip interval to the window
+    intervals.sort(key=lambda x: x[0]) # sort intervals on the basis of start time
 
     for s, e in intervals:
         # If there's a free gap between cur and this busy start
@@ -122,24 +131,25 @@ def schedule_meeting(
         organizer_email = participants_emails[0]
 
     # Build services and collect busy blocks
-    start_local, end_local = _slot_window_bounds(date_str, slot_window, timezone_name)
+    start_local, end_local = _slot_window_bounds(date_str, slot_window, timezone_name) # get start and end window time of slot window
     window_start_utc = start_local.astimezone(timezone.utc)
     window_end_utc   = end_local.astimezone(timezone.utc)
 
-    all_busy_utc: List[Tuple[datetime, datetime]] = []
+    all_busy_utc: List[Tuple[datetime, datetime]] = [] #store all busy intervals
     services: Dict[str, any] = {}
 
     for email in participants_emails:
-        creds = _creds_for(email)
-        service = build("calendar", "v3", credentials=creds)
+        creds = _creds_for(email) #retriving google auth credentials of user
+        service = build("calendar", "v3", credentials=creds) #creating a service object to interact with google calender api
         services[email] = service
 
-        busy_blocks = _freebusy(service, start_local, end_local, timezone_name)
+        busy_blocks = _freebusy(service, start_local, end_local, timezone_name) #calls _freebusy function to get list of busy slots
         for b in busy_blocks:
             s = datetime.fromisoformat(b["start"].replace("Z", "+00:00")).astimezone(timezone.utc)
             e = datetime.fromisoformat(b["end"].replace("Z", "+00:00")).astimezone(timezone.utc)
             all_busy_utc.append((s, e))
 
+# finding first free gap
     slot_start, slot_end = _find_first_free_gap(all_busy_utc, window_start_utc, window_end_utc, duration_minutes)
     if not slot_start:
         raise ValueError("No common free slot found in the selected window.")
@@ -152,14 +162,15 @@ def schedule_meeting(
 "end": {"dateTime": slot_end.isoformat(), "timeZone": timezone_name},
 
         "attendees": [{"email": e} for e in participants_emails],
-        "conferenceData": {"createRequest": {"requestId": f"meet-{int(datetime.now(tz=timezone.utc).timestamp())}"}},
+        "conferenceData": {"createRequest": {"requestId": f"meet-{int(datetime.now(tz=timezone.utc).timestamp())}"}}, #requests a google meet link with unique requestid
     }
 
+# insert event in google calender
     created = organizer_service.events().insert(
         calendarId="primary",
         body=event,
-        conferenceDataVersion=1,
-        sendUpdates="all",
+        conferenceDataVersion=1, 
+        sendUpdates="all",#notify all attendees via email
     ).execute()
 
     return {

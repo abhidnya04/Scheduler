@@ -241,6 +241,12 @@
 #     return {"message": "Meeting scheduled", "meeting_id": meeting_id}
 
 
+
+
+
+
+
+
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import RedirectResponse, JSONResponse
 from google_auth_oauthlib.flow import Flow
@@ -373,7 +379,7 @@ def google_callback(request: Request):
             "email": email,
             "access_token": access_token,
             "refresh_token": refresh_token,
-            "token_expiry": token_expiry_str
+            "token_expiry": token_expiry_str,
         }
 
         # upsert -> Insert or update user in Supabase
@@ -389,7 +395,9 @@ def google_callback(request: Request):
 
         # Build redirect URL to frontend schedule page
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
-        redirect_url = f"{frontend_url}/schedule?authorized={urllib.parse.quote_plus(email)}&user_id={user_id}"
+        redirect_url = f"{frontend_url}/dashboard?authorized={urllib.parse.quote_plus(email)}&user_id={user_id}"
+        # redirect_url = f"{frontend_url}/schedule?authorized={urllib.parse.quote_plus(email)}&user_id={user_id}"
+        # redirect_url = f"{frontend_url}/dashboard"
 
         return RedirectResponse(redirect_url)
 
@@ -489,3 +497,10 @@ def schedule_meeting_api(body: ScheduleBody):
         return result
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": str(e)})
+
+
+# Minimal endpoint for dashboard to list upcoming meetings
+@app.get("/meetings/upcoming")
+def get_upcoming_meetings(user_id: str):
+    # TODO: integrate with real meetings storage
+    return []

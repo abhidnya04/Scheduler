@@ -1,9 +1,9 @@
 import {
-    CalendarIcon,
-    ClockIcon,
-    PlusIcon,
-    UserGroupIcon,
-    VideoCameraIcon
+  CalendarIcon,
+  ClockIcon,
+  PlusIcon,
+  UserGroupIcon,
+  VideoCameraIcon
 } from "@heroicons/react/24/outline";
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -13,6 +13,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const queryParams = new URLSearchParams(location.search);
   const loggedInUserId = queryParams.get("user_id");
+  const authorized = queryParams.get("authorized");
 
   const [user, setUser] = useState(null);
   const [upcomingMeetings, setUpcomingMeetings] = useState([]);
@@ -21,6 +22,16 @@ export default function Dashboard() {
 
   // Fetch user data
   useEffect(() => {
+    // If an invitee just authorized, stash for later and clean URL (stay on dashboard)
+    if (authorized) {
+      try {
+        localStorage.setItem("authorized_email", authorized);
+      } catch {}
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete("authorized");
+      window.history.replaceState({}, "", clean.pathname + clean.search);
+    }
+
     if (loggedInUserId) {
       fetch(`http://localhost:8000/users/${loggedInUserId}`)
         .then((res) => res.json())

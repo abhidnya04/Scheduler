@@ -3,11 +3,12 @@ import { CalendarIcon, ClockIcon, EnvelopeIcon, UserGroupIcon } from "@heroicons
 import { useEffect, useState } from "react";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import "./calendar-style.css";
 
 export default function SchedulePage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const queryParams = new URLSearchParams(location.search);
   const loggedInUserId = queryParams.get("user_id");
 
@@ -220,6 +221,14 @@ export default function SchedulePage() {
       if (res.ok && data?.hangoutLink) {
         alert(`Meeting scheduled!\n\nMeet link: ${data.hangoutLink}`);
         window.open(data.hangoutLink, "_blank");
+        
+        // Redirect to dashboard after successful meeting creation
+        const authorizedEmail = queryParams.get("authorized");
+        if (authorizedEmail) {
+          navigate(`/dashboard?authorized=${encodeURIComponent(authorizedEmail)}&user_id=${loggedInUserId}`);
+        } else {
+          navigate(`/dashboard?user_id=${loggedInUserId}`);
+        }
       } else {
         alert(data?.error || "Failed to schedule meeting.");
       }

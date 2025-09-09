@@ -492,13 +492,89 @@ def schedule_meeting_api(body: ScheduleBody):
             timezone_name=body.timezone or "UTC",
             organizer_email=body.host_email,
         )
+        
+        # Save meeting to database
+        if result and result.get("hangoutLink"):
+            # Get organizer user_id
+            organizer_data = supabase.table("users").select("id").eq("email", body.host_email).execute()
+            organizer_user_id = organizer_data.data[0]["id"] if organizer_data.data else None
+            
+            # Calculate start and end times (assuming 9 AM start for now - you can modify this)
+            from datetime import datetime, timedelta
+            start_time = datetime.fromisoformat(body.date + "T09:00:00")
+            end_time = start_time + timedelta(minutes=body.duration)
+            
+            # Insert meeting
+            meeting_data = {
+                "title": body.title,
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat(),
+                "duration_minutes": body.duration,
+                "organizer_email": body.host_email,
+                "organizer_user_id": organizer_user_id,
+                "hangout_link": result.get("hangoutLink"),
+                "timezone": body.timezone or "UTC"
+            }
+            
+            meeting_result = supabase.table("meetings").insert(meeting_data).execute()
+            meeting_id = meeting_result.data[0]["id"] if meeting_result.data else None
+            
+            # Insert participants
+            if meeting_id:
+                participant_data = []
+                for email in participants:
+                    # Get participant user_id if exists
+                    participant_user_data = supabase.table("users").select("id").eq("email", email).execute()
+                    participant_user_id = participant_user_data.data[0]["id"] if participant_user_data.data else None
+                    
+                    participant_data.append({
+                        "meeting_id": meeting_id,
+                        "participant_email": email,
+                        "participant_user_id": participant_user_id,
+                        "status": "accepted" if email == body.host_email else "invited"
+                    })
+                
+                if participant_data:
+                    supabase.table("meeting_participants").insert(participant_data).execute()
+        
         return result
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": str(e)})
 
 
-# Minimal endpoint for dashboard to list upcoming meetings
+# Endpoint for dashboard to list upcoming meetings
 @app.get("/meetings/upcoming")
 def get_upcoming_meetings(user_id: str):
-    # TODO: integrate with real meetings storage
-    return []
+    try:
+        from datetime import datetime
+        
+        print(f"Fetching meetings for user_id: {user_id}")
+        
+        # Simple approach: get all meetings where user is organizer
+        meetings_query = supabase.table("meetings").select("*").eq("organizer_user_id", user_id).gte("start_time", datetime.now().isoformat()).order("start_time").execute()
+        
+        print(f"Found {len(meetings_query.data)} meetings")
+        
+        meetings = []
+        for meeting in meetings_query.data:
+            # Get participants for this meeting
+            participants_query = supabase.table("meeting_participants").select("participant_email, status").eq("meeting_id", meeting["id"]).execute()
+            
+            meetings.append({
+                "id": meeting["id"],
+                "title": meeting["title"],
+                "start_time": meeting["start_time"],
+                "end_time": meeting["end_time"],
+                "duration": meeting["duration_minutes"],
+                "hangout_link": meeting["hangout_link"],
+                "organizer_email": meeting["organizer_email"],
+                "participants": [{"email": p["participant_email"], "status": p["status"]} for p in participants_query.data]
+            })
+        
+        print(f"Returning {len(meetings)} meetings")
+        return meetings
+    except Exception as e:
+        print(f"Error fetching meetings: {e}")
+        import traceback
+        traceback.print_exc()
+        return []

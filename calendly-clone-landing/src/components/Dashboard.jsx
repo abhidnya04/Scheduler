@@ -42,6 +42,7 @@ export default function Dashboard() {
         })
         .then((res) => res.json())
         .then((meetings) => {
+          console.log("Fetched meetings:", meetings);
           setUpcomingMeetings(meetings || []);
         })
         .catch((err) => {

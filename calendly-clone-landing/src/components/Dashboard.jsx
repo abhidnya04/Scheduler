@@ -90,7 +90,12 @@ export default function Dashboard() {
   }, [loggedInUserId]);
 
   const handleCreateMeeting = () => {
-    navigate(`/schedule?user_id=${loggedInUserId}`);
+    const authorizedEmail = queryParams.get("authorized") || user?.email;
+    if (authorizedEmail) {
+      navigate(`/schedule?authorized=${encodeURIComponent(authorizedEmail)}&user_id=${loggedInUserId}`);
+    } else {
+      navigate(`/schedule?user_id=${loggedInUserId}`);
+    }
   };
 
   const formatDate = (dateString) => {

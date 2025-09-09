@@ -393,11 +393,9 @@ def google_callback(request: Request):
         user_data = supabase.table("users").select("id").eq("email", email).execute()
         user_id = user_data.data[0]["id"] if user_data.data else ""
 
-        # Build redirect URL to frontend schedule page
+        # Build redirect URL to frontend dashboard page
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
         redirect_url = f"{frontend_url}/dashboard?authorized={urllib.parse.quote_plus(email)}&user_id={user_id}"
-        # redirect_url = f"{frontend_url}/schedule?authorized={urllib.parse.quote_plus(email)}&user_id={user_id}"
-        # redirect_url = f"{frontend_url}/dashboard"
 
         return RedirectResponse(redirect_url)
 
